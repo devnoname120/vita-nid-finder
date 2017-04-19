@@ -100,6 +100,10 @@ static void convertToImportsTable3xx(SceImportsTable2xx *import_2xx, SceImportsT
 	}
 }
 
+// Output in a compact way
+int compact = 0;
+
+
 int ReadFile(char *file, void *buf, int size) {
 	FILE *f = fopen(file, "rb");
 
@@ -128,25 +132,31 @@ int WriteFile(char *file, void *buf, int size) {
 	return wt;
 }
 
+
 int main(int argc, char *argv[])
 {
 	int count = 0;
 
 	static char text_buf[64 * 1024 * 1024];
+	
+	compact = 0;
+	if (argc >= 5 && !strcmp(argv[1], "-c")) {
+		compact = 1;
+	}
 
-	if (argc < 4) {
-		fprintf(stderr, "Usage:\n\t%s seg.bin module_name text_addr\n\n", argv[0]);
+	if (argc < 4 + compact) {
+		fprintf(stderr, "Usage:\n\t%s [-c] seg.bin module_name text_addr\n\n", argv[0]);
 		return 1;
 	}
 
-	int size = ReadFile(argv[1], text_buf, sizeof(text_buf));
+	int size = ReadFile(argv[1+compact], text_buf, sizeof(text_buf));
 
 	uint32_t sce_module_info_offset = 0;
 
 	// Get sce_module_info offset
 	int i;
 	for (i = 0; i < size; i++) {
-		if (strcmp((char *)text_buf + i, argv[2]) == 0) {
+		if (strcmp((char *)text_buf + i, argv[2+compact]) == 0) {
 			sce_module_info_offset = i - 0x4;
 			break;
 		}
@@ -155,18 +165,21 @@ int main(int argc, char *argv[])
 	if (sce_module_info_offset == 0)
 		return 1;
 
-	uint32_t text_addr = strtoul(argv[3], NULL, 16);
+	uint32_t text_addr = strtoul(argv[3+compact], NULL, 16);
 
 	SceModuleInfo *mod_info = (SceModuleInfo *)(text_buf + sce_module_info_offset);
+	
+	if (!compact) {
+		printf("- MODULE -\n");
+		printf("NAME: %s\n", argv[2+compact]);
+		printf("NID: 0x%08X\n", mod_info->nid);
+		printf("TEXT_ADDR: 0x%08X\n", text_addr);
+		printf("\n\n");
 
-	printf("- MODULE -\n");
-	printf("NAME: %s\n", argv[2]);
-	printf("NID: 0x%08X\n", mod_info->nid);
-	printf("TEXT_ADDR: 0x%08X\n", text_addr);
-	printf("\n\n");
-
-	printf("- EXPORTS -\n");
-
+		printf("- EXPORTS -\n");
+	} else {
+		printf("module %s 0x%08X\n", argv[2+compact], mod_info->nid);
+	}
 	count = 0;
 
 	i = mod_info->expTop;
@@ -177,58 +190,67 @@ int main(int argc, char *argv[])
 			char *lib_name = (char *)((uintptr_t)text_buf + (export->lib_name - text_addr));
 			uint32_t *nid_table = (uint32_t *)((uintptr_t)text_buf + (export->nid_table - text_addr));
 			uint32_t *entry_table = (uint32_t *)((uintptr_t)text_buf + (export->entry_table - text_addr));
+			int syscall = export->attribute & 0x4000;
+			if (!compact) {
+				printf("    LIBRARY %d:\n", count);
+				printf("    NAME: %s\n", lib_name);
+				printf("    SYSCALL: %s\n", syscall ? "Yes" : "No"); 
+				printf("    NID: 0x%08X\n", export->module_nid);
 
-			printf("    LIBRARY %d:\n", count);
-			printf("    NAME: %s\n", lib_name);
-			printf("    NID: 0x%08X\n", export->module_nid);
-
-			printf("\n");
-
+				printf("\n");
+			} else {
+				printf("library %s %s 0x%08X\n", lib_name, syscall? "yes" : "no", export->module_nid);				
+			}
 			int j;
 			for (j = 0; j < export->num_functions; j++) {
-				printf("      NID %d: 0x%08X\n", j, nid_table[j]);
+				if (!compact)
+					printf("      NID %d: 0x%08X\n", j, nid_table[j]);
+				else
+					printf("function 0x%08X\n", nid_table[j]);
 			}
 
-			printf("\n");
+			if (!compact)
+				printf("\n");
 
 			count++;
 		}
 
 		i += export->size;
 	}
+	
+	if (!compact) { 
+		printf("\n\n");
 
-	printf("\n\n");
+		printf("- IMPORTS -\n");
 
-	printf("- IMPORTS -\n");
+		i = mod_info->impTop;
+		while (i < mod_info->impBtm) {
+			SceImportsTable3xx import;
+			convertToImportsTable3xx((void *)text_buf + i, &import);
 
-	i = mod_info->impTop;
-	while (i < mod_info->impBtm) {
-		SceImportsTable3xx import;
-		convertToImportsTable3xx((void *)text_buf + i, &import);
+			if (import.lib_name) {
+				char *lib_name = (char *)((uintptr_t)text_buf + (import.lib_name - text_addr));
+				uint32_t *nid_table = (uint32_t *)((uintptr_t)text_buf + (import.func_nid_table - text_addr));
+				uint32_t *entry_table = (uint32_t *)((uintptr_t)text_buf + (import.func_entry_table - text_addr));
 
-		if (import.lib_name) {
-			char *lib_name = (char *)((uintptr_t)text_buf + (import.lib_name - text_addr));
-			uint32_t *nid_table = (uint32_t *)((uintptr_t)text_buf + (import.func_nid_table - text_addr));
-			uint32_t *entry_table = (uint32_t *)((uintptr_t)text_buf + (import.func_entry_table - text_addr));
+				printf("  LIBRARY %d:\n", count);
+				printf("    NAME: %s\n", lib_name);
+				printf("    NID: 0x%08X\n", import.module_nid);
 
-			printf("  LIBRARY %d:\n", count);
-			printf("    NAME: %s\n", lib_name);
-			printf("    NID: 0x%08X\n", import.module_nid);
+				printf("\n");
 
-			printf("\n");
+				int j;
+				for (j = 0; j < import.num_functions; j++) {
+					printf("      NID %d: 0x%08X\n", j, nid_table[j]);
+				}
 
-			int j;
-			for (j = 0; j < import.num_functions; j++) {
-				printf("      NID %d: 0x%08X\n", j, nid_table[j]);
+				printf("\n");
+
+				count++;
 			}
 
-			printf("\n");
-
-			count++;
+			i += import.size;
 		}
-
-		i += import.size;
 	}
-
 	return 0;
 }

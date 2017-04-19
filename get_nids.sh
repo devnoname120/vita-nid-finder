@@ -24,8 +24,9 @@ function folder_nids {
 		parts=($(basename "$file" | sed -rn "s/0x[0-9A-Fa-f]+_(0x[0-9A-Fa-f]+)_(\w+)_0\.bin/\1 \2/p"))
 		name=${parts[1]}
 		addr=${parts[0]}
-
-		vita-nid-finder-flow "$file" "$name" "$addr"
+		
+		# Files with this kind of filename are user
+		./vita-nid-finder-flow -c "$file" "$name" "$addr"
 	done
 
 	for file in "$1"/*_seg0.bin
@@ -33,8 +34,9 @@ function folder_nids {
 		parts=($(basename "$file" | sed -rn "s/(\w+)_(0x[0-9A-Fa-f]+)_seg0.bin/\2 \1/p"))
 		name=${parts[1]}
 		addr=${parts[0]}
-
-		vita-nid-finder-flow "$file" "$name" "$addr"
+		
+		# Files with this kind of filename are kernel
+		./vita-nid-finder-flow -c "$file" "$name" "$addr"
 	done
 }
 
