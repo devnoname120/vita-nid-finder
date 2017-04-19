@@ -3,7 +3,7 @@ Get exports / imports of dumped modules.
 # Compilation
 
 ```
-clang vita-nid-finder-flow.c -ovita-nid-finder-flow
+clang vita-nid-finder.c -ovita-nid-finder
 ```
 
 # Usage
