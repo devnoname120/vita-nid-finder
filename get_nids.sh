@@ -26,7 +26,7 @@ function folder_nids {
 		addr=${parts[0]}
 		
 		# Files with this kind of filename are user
-		./vita-nid-finder -c "$file" "$name" "$addr"
+		./vita-nid-finder "$file" "$name" "$addr"
 	done
 
 	for file in "$1"/*_seg0.bin
@@ -36,7 +36,7 @@ function folder_nids {
 		addr=${parts[0]}
 		
 		# Files with this kind of filename are kernel
-		./vita-nid-finder -c "$file" "$name" "$addr"
+		./vita-nid-finder "$file" "$name" "$addr"
 	done
 }
 
